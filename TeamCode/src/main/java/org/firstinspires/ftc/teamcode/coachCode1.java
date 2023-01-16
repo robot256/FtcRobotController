@@ -75,14 +75,20 @@ public class coachCode1 extends OpMode
     private Servo placerServo = null;
     private Servo dropperServo = null;
 
-    private final int FETCHER_MAX_TICKS = 4000;
+    private final double FETCHER_MAX_TICKS = 4000;
+    private final double FETCHER_SAFE_TICKS = 250;
+    private final double FETCHER_SUBSTATION_TICKS = 2000;
     private final double LEVER_HOME = 0;
     private final double LEVER_HORIZONTAL = 0.75;
     private final double LEVER_GROUND = 1;
     private final double GRABBER_OPEN = 0;
     private final double GRABBER_CLOSE = 1;
 
-    private final int LIFT_MAX_TICKS = 2500;
+    private final double LIFT_MAX_TICKS = 2500;
+    private final double LIFT_SAFE_TICKS = 175;
+    private final double LIFT_LOW_TICKS = 1000;
+    private final double LIFT_MEDIUM_TICKS = 1800;
+    private final double LIFT_HIGH_TICKS = 2200;
     private final double PLACER_COLLECT = 0;
     private final double PLACER_READY = 0.25;
     private final double PLACER_BRACE = 0.5;
@@ -97,7 +103,10 @@ public class coachCode1 extends OpMode
     private boolean liftHomed = false;
     private boolean fetcherManualControl = false;
     private boolean liftManualControl = false;
-
+    private boolean fetcherAutoControl = false;
+    private boolean liftAutoControl = false;
+    private double fetcherPositionCommand = 0;
+    private double liftPositionCommand = 0;
 
     /*
      * Code to run ONCE when the driver hits INIT
@@ -181,12 +190,9 @@ public class coachCode1 extends OpMode
         }
         // Read sensors
         double fetcherEncoder = fetcherMotor.getCurrentPosition();
-        boolean fetcherLimitPressed = !fetcherLowerLimit.getState();
         double liftEncoder = liftMotor.getCurrentPosition();
+        boolean fetcherLimitPressed = !fetcherLowerLimit.getState();
         boolean liftLimitPressed = !liftLowerLimit.getState();
-
-        double fetcherPositionCommand = fetcherEncoder;
-        double liftPositionCommand = liftEncoder;
 
         // Limit switch reset logic
         if(fetcherLimitPressed && !previousFetcherLimitPressed) {
@@ -200,25 +206,69 @@ public class coachCode1 extends OpMode
             liftHomed = true;
         }
 
-        // Joystick control of mechanisms
-        double fetcherJoystick = gamepad2.left_stick_y;
-        if(fetcherJoystick > 0.1 || fetcherJoystick < -0.1) {
-            fetcherPositionCommand += fetcherJoystick * 10;
-            fetcherManualControl = true;
-        } else if(fetcherManualControl) {
-            fetcherPositionCommand = fetcherEncoder;
-            fetcherManualControl = false;
-        }
-        double liftJoystick = gamepad2.right_stick_y;
-        if(liftJoystick > 0.1 || liftJoystick < -0.1) {
-            fetcherPositionCommand += liftJoystick * 10;
-            fetcherManualControl = true;
-        } else if(fetcherManualControl) {
-            fetcherPositionCommand = fetcherEncoder;
-            fetcherManualControl = false;
+        // Button to re-home the fetcher (disables auto moves and allows travel to -10000)
+        if(gamepad2.a) {
+            fetcherHomed = false;
         }
 
-        // Button preset controls
+        // Button presets override joysticks
+        // Home button takes priority
+        // If joystick moves, it aborts the auto move and starts manual from wherever it is now
+        if(fetcherHomed && gamepad2.dpad_down) {
+            fetcherPositionCommand = 0;
+            fetcherManualControl = false;
+            fetcherAutoControl = true;
+        } else if(fetcherHomed && gamepad2.dpad_left) {
+            fetcherPositionCommand = FETCHER_SUBSTATION_TICKS;
+            fetcherManualControl = false;
+            fetcherAutoControl = true;
+        } else {
+            double fetcherJoystick = gamepad2.left_stick_y;
+            if (fetcherJoystick > 0.1 || fetcherJoystick < -0.1) {
+                if(fetcherAutoControl) {  // Abort automatic operation
+                    fetcherPositionCommand = fetcherEncoder;
+                    fetcherAutoControl = false;
+                }
+                fetcherPositionCommand += fetcherJoystick * 10;
+                fetcherManualControl = true;
+            } else if (fetcherManualControl) {
+                fetcherPositionCommand = fetcherEncoder;
+                fetcherManualControl = false;
+            }
+        }
+
+        if(liftHomed && gamepad1.x) {
+            liftPositionCommand = 0;
+            liftManualControl = false;
+            liftAutoControl = true;
+        } else if(liftHomed && gamepad1.a) {
+            liftPositionCommand = LIFT_LOW_TICKS;
+            liftManualControl = false;
+            liftAutoControl = true;
+        } else if(liftHomed && gamepad1.b) {
+            liftPositionCommand = LIFT_MEDIUM_TICKS;
+            liftManualControl = false;
+            liftAutoControl = true;
+        } else if(liftHomed && gamepad1.y) {
+            liftPositionCommand = LIFT_HIGH_TICKS;
+            liftManualControl = false;
+            liftAutoControl = true;
+        } else {
+            double liftJoystick = gamepad2.right_stick_y;
+            if(liftJoystick > 0.1 || liftJoystick < -0.1) {
+                if(liftAutoControl) {  // Abort automatic operation
+                    liftPositionCommand = liftEncoder;
+                    liftAutoControl = false;
+                }
+                liftPositionCommand += liftJoystick * 10;
+                liftManualControl = true;
+            } else if(liftManualControl) {
+                liftPositionCommand = liftEncoder;
+                liftManualControl = false;
+            }
+        }
+
+        // Add safety zone checks here?
 
         // Check bounds of command produced by manual and/or automatic code
         fetcherPositionCommand = Math.min(fetcherPositionCommand, FETCHER_MAX_TICKS);
@@ -267,6 +317,8 @@ public class coachCode1 extends OpMode
         mecanumFrontRight.setVelocity(frontRightVelocity);
 
         telemetry.addData("Runtime", runtime.seconds());
+        telemetry.addData("Fetcher", String.format("enc %d, tgt %d, lmt %s", fetcherEncoder, fetcherPositionCommand, String.valueOf(fetcherLimitPressed)));
+        telemetry.addData("Lift",    String.format("enc %d, tgt %d, lmt %s", liftEncoder, liftPositionCommand, String.valueOf(liftLimitPressed)));
         telemetry.addData("Mecanum", String.format("FL%1.4f BL%1.4f BR%1.4f FR%1.4f",frontLeftVelocity,backLeftVelocity,backRightVelocity,frontRightVelocity));
 
         // Store values for next loop
