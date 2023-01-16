@@ -36,7 +36,6 @@ import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.util.ElapsedTime;
-import com.qualcomm.robotcore.util.Range;
 
 import java.util.List;
 
@@ -54,8 +53,8 @@ import java.util.List;
  * Remove or comment out the @Disabled line to add this opmode to the Driver Station OpMode list
  */
 
-@TeleOp(name="Basic: Iterative OpMode", group="Iterative Opmode")
-@Disabled
+@TeleOp(name="Tom's Simple Mecanum", group="Iterative Opmode")
+//@Disabled
 public class IterativeMecanumBootstrap extends OpMode
 {
     private ElapsedTime runtime = new ElapsedTime();
@@ -64,6 +63,7 @@ public class IterativeMecanumBootstrap extends OpMode
     private DcMotorEx mecanumFrontRight = null;
     private DcMotorEx mecanumBackLeft = null;
     private DcMotorEx mecanumBackRight = null;
+
 
     /*
      * Code to run ONCE when the driver hits INIT
@@ -125,6 +125,7 @@ public class IterativeMecanumBootstrap extends OpMode
             module.clearBulkCache();
         }
 
+
         // Mecanum joystick control with scaling per axis
         double translateForwardCommand = -gamepad1.left_stick_y * 0.5;
         double translateRightCommand = gamepad1.left_stick_x * 0.5;
@@ -141,12 +142,15 @@ public class IterativeMecanumBootstrap extends OpMode
         backLeftVelocity /= maxVelocity;
         backRightVelocity /= maxVelocity;
         frontRightVelocity /= maxVelocity;
+
         // Send commands to motors
         mecanumFrontLeft.setVelocity(frontLeftVelocity);
         mecanumBackLeft.setVelocity(backLeftVelocity);
         mecanumBackRight.setVelocity(backRightVelocity);
         mecanumFrontRight.setVelocity(frontRightVelocity);
 
+        telemetry.addData("Runtime:", runtime.toString());
+        telemetry.addData("Mecanum:", String.format("FL%1.4f BL%1.4f BR%1.4f FR%1.4f",frontLeftVelocity,backLeftVelocity,backRightVelocity,frontRightVelocity));
 
     }
 
