@@ -194,6 +194,41 @@ public class coachCode1 extends OpMode
         boolean fetcherLimitPressed = !fetcherLowerLimit.getState();
         boolean liftLimitPressed = !liftLowerLimit.getState();
 
+        // Read the servo current commands
+        double previousLeverCommand = leverServo.getPosition();
+        double previousGrabberCommand = grabberServo.getPosition();
+        double previousPlacerCommand = placerServo.getPosition();
+        double previousDropperCommand = dropperServo.getPosition();
+
+        // Buttons to control the servos
+        // Placer moves while button is held, returns to Brace position when released
+        // While in Collect state, dropper collects automatically
+        // Otherwise, dropper can be used independently.
+        // Dropper stops when dropper & placerCollect buttons released.
+        boolean dropperToEjectCommand = gamepad1.right_trigger > 0 || gamepad2.right_trigger > 0;
+        boolean dropperToIngestCommand = gamepad1.left_bumper || gamepad2.left_bumper;
+        boolean placerToScoreCommand = gamepad1.left_trigger > 0 || gamepad2.left_trigger > 0;
+        boolean placerToCollectCommand = gamepad1.right_bumper || gamepad2.right_bumper;
+        boolean dropperCommandedByMacro = false;
+        if(placerToScoreCommand && !placerToCollectCommand) {
+            placerServo.setPosition(PLACER_SCORE);
+        } else if(placerToCollectCommand && !placerToScoreCommand) {
+            placerServo.setPosition(PLACER_COLLECT);
+            dropperServo.setPosition(DROPPER_COLLECT);
+            dropperCommandedByMacro = true;
+        } else {
+            placerServo.setPosition(PLACER_BRACE);
+        }
+        if(!dropperCommandedByMacro) {
+            if(dropperToEjectCommand && !dropperToIngestCommand) {
+                dropperServo.setPosition(DROPPER_EJECT);
+            } else if(dropperToIngestCommand && !dropperToEjectCommand) {
+                dropperServo.setPosition(DROPPER_COLLECT);
+            } else {
+                dropperServo.setPosition(DROPPER_STOP);
+            }
+        }
+
         // Limit switch reset logic
         if(fetcherLimitPressed && !previousFetcherLimitPressed) {
             fetcherMotor.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
