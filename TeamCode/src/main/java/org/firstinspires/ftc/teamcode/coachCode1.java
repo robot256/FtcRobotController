@@ -339,11 +339,13 @@ public class coachCode1 extends OpMode
         double frontRightVelocity = translateForwardCommand - translateRightCommand + rotateLeftCommand;
         double maxVelocity = Math.max(Math.abs(frontLeftVelocity), Math.max(Math.abs(backLeftVelocity),
                 Math.max(Math.abs(backRightVelocity), Math.abs(frontRightVelocity))));
-        // Scale translation and rotation evenly for driver control
-        frontLeftVelocity /= maxVelocity;
-        backLeftVelocity /= maxVelocity;
-        backRightVelocity /= maxVelocity;
-        frontRightVelocity /= maxVelocity;
+        if(maxVelocity > 1) {
+            // Scale translation and rotation evenly for driver control
+            frontLeftVelocity /= maxVelocity;
+            backLeftVelocity /= maxVelocity;
+            backRightVelocity /= maxVelocity;
+            frontRightVelocity /= maxVelocity;
+        }
 
         // Send commands to motors
         mecanumFrontLeft.setVelocity(frontLeftVelocity);

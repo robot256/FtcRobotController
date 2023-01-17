@@ -29,14 +29,18 @@
 
 package org.firstinspires.ftc.teamcode;
 
+import android.os.Environment;
+
 import com.qualcomm.hardware.lynx.LynxModule;
-import com.qualcomm.robotcore.eventloop.opmode.Disabled;
 import com.qualcomm.robotcore.eventloop.opmode.OpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.util.ElapsedTime;
 
+import java.io.File;
+import java.io.FileWriter;
+import java.io.IOException;
 import java.util.List;
 
 /**
@@ -64,7 +68,7 @@ public class IterativeMecanumBootstrap extends OpMode
     private DcMotorEx mecanumBackLeft = null;
     private DcMotorEx mecanumBackRight = null;
 
-
+    private FileWriter fileStream = null;
     /*
      * Code to run ONCE when the driver hits INIT
      */
@@ -76,7 +80,7 @@ public class IterativeMecanumBootstrap extends OpMode
         mecanumFrontLeft =  hardwareMap.get(DcMotorEx.class, "fl");
         mecanumFrontLeft.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
         mecanumFrontLeft.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
-        //mecanumFrontLeft.setDirection(DcMotorEx.Direction.REVERSE);
+        mecanumFrontLeft.setDirection(DcMotorEx.Direction.REVERSE);
         mecanumFrontRight = hardwareMap.get(DcMotorEx.class, "fr");
         mecanumFrontRight.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
         mecanumFrontRight.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
@@ -84,7 +88,7 @@ public class IterativeMecanumBootstrap extends OpMode
         mecanumBackLeft =  hardwareMap.get(DcMotorEx.class, "bl");
         mecanumBackLeft.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
         mecanumBackLeft.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
-        //mecanumBackLeft.setDirection(DcMotorEx.Direction.REVERSE);
+        mecanumBackLeft.setDirection(DcMotorEx.Direction.REVERSE);
         mecanumBackRight = hardwareMap.get(DcMotorEx.class, "br");
         mecanumBackRight.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
         mecanumBackRight.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
@@ -113,7 +117,21 @@ public class IterativeMecanumBootstrap extends OpMode
      */
     @Override
     public void start() {
+
         runtime.reset();
+
+        File file = new File(Environment.getExternalStorageDirectory(), "thisFileShouldntExist.csv");
+        try {
+            fileStream = new FileWriter(file);
+            fileStream.write("Time,JoyX,JoyY,JoyR\n");
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+
+    }
+
+    private double joystickExponentialTransform(double input) {
+        return Math.signum(input) * Math.expm1(5*Math.abs(input)) / Math.expm1(5);
     }
 
     /*
@@ -127,9 +145,9 @@ public class IterativeMecanumBootstrap extends OpMode
 
 
         // Mecanum joystick control with scaling per axis
-        double translateForwardCommand = -gamepad1.left_stick_y * 0.5;
-        double translateRightCommand = gamepad1.left_stick_x * 0.5;
-        double rotateLeftCommand = -gamepad1.right_stick_x * 0.5;
+        double translateForwardCommand = joystickExponentialTransform(-gamepad1.left_stick_y);
+        double translateRightCommand = joystickExponentialTransform(gamepad1.left_stick_x);
+        double rotateLeftCommand = joystickExponentialTransform(-gamepad1.right_stick_x);
         // Calculate wheel speeds for cross-oriented mecanum wheels
         double frontLeftVelocity = translateForwardCommand + translateRightCommand - rotateLeftCommand;
         double backLeftVelocity = translateForwardCommand - translateRightCommand - rotateLeftCommand;
@@ -137,20 +155,30 @@ public class IterativeMecanumBootstrap extends OpMode
         double frontRightVelocity = translateForwardCommand - translateRightCommand + rotateLeftCommand;
         double maxVelocity = Math.max(Math.abs(frontLeftVelocity), Math.max(Math.abs(backLeftVelocity),
                 Math.max(Math.abs(backRightVelocity), Math.abs(frontRightVelocity))));
-        // Scale translation and rotation evenly for driver control
-        frontLeftVelocity /= maxVelocity;
-        backLeftVelocity /= maxVelocity;
-        backRightVelocity /= maxVelocity;
-        frontRightVelocity /= maxVelocity;
+        if(maxVelocity > 1) {
+            // Scale translation and rotation evenly for driver control
+            frontLeftVelocity /= maxVelocity;
+            backLeftVelocity /= maxVelocity;
+            backRightVelocity /= maxVelocity;
+            frontRightVelocity /= maxVelocity;
+        }
 
         // Send commands to motors
-        mecanumFrontLeft.setVelocity(frontLeftVelocity);
-        mecanumBackLeft.setVelocity(backLeftVelocity);
-        mecanumBackRight.setVelocity(backRightVelocity);
-        mecanumFrontRight.setVelocity(frontRightVelocity);
+        mecanumFrontLeft.setPower(frontLeftVelocity);
+        mecanumBackLeft.setPower(backLeftVelocity);
+        mecanumBackRight.setPower(backRightVelocity);
+        mecanumFrontRight.setPower(frontRightVelocity);
 
         telemetry.addData("Runtime:", runtime.toString());
+        telemetry.addData("Joysticks:", String.format("X%1.4f Y%1.4f R%1.4f",translateRightCommand,translateForwardCommand,rotateLeftCommand));
         telemetry.addData("Mecanum:", String.format("FL%1.4f BL%1.4f BR%1.4f FR%1.4f",frontLeftVelocity,backLeftVelocity,backRightVelocity,frontRightVelocity));
+
+        try {
+            fileStream.write(String.format("%4.2f,%1.4f,%1.4f,%1.4f\n",runtime.milliseconds(), translateRightCommand,translateForwardCommand,rotateLeftCommand));
+            fileStream.flush();
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
 
     }
 
@@ -163,6 +191,13 @@ public class IterativeMecanumBootstrap extends OpMode
         mecanumBackLeft.setVelocity(0);
         mecanumBackRight.setVelocity(0);
         mecanumFrontRight.setVelocity(0);
+        try {
+            fileStream.write("End of file");
+            fileStream.flush();
+            fileStream.close();
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
     }
 
 }
